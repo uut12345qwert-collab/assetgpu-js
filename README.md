@@ -33,15 +33,22 @@ This library runs your WGSL headlessly in Node and writes standard asset files.
 npm install assetgpu
 ```
 
-Optional peer dependencies (install only what you need):
+**Required for any rendering:**
+
+```bash
+npm install webgpu
+```
+
+**Optional (install only what you need):**
 
 ```bash
 npm install sharp                       # images + favicons
 npm install @ffmpeg-installer/ffmpeg    # video + mp3/ogg
-npm install webgpu                      # headless WebGPU (required for rendering)
 ```
 
-> **Note:** The `webgpu` native binding is platform-sensitive. Headless environments often need a software renderer (SwiftShader / lavapipe) or a GPU-enabled machine.
+WAV audio works with **zero** extra deps beyond `webgpu`.
+
+> **WebGPU on your machine:** The `webgpu` npm package is a native Dawn binding and is platform-sensitive. Many laptops work out of the box; headless servers often need a software renderer (SwiftShader / lavapipe) or a GPU-enabled environment. If `requestAdapter()` fails, that is an environment issue — not a bug in this library.
 
 ---
 
@@ -65,7 +72,7 @@ const png = await exportImage({
 
 // Fragment shader → MP4
 const mp4 = await exportVideo({
-  wgsl: `/* same shape */`,
+  wgsl: `/* same shape as above */`,
   width: 640,
   height: 360,
   format: 'mp4',
@@ -95,6 +102,7 @@ const wav = await exportAudio({
   `,
   durationSeconds: 1,
   format: 'wav',
+  // workgroupSize: 64,  // must match @workgroup_size(N) above
 });
 ```
 
@@ -112,31 +120,28 @@ npx assetgpu audio --wgsl audio.wgsl --duration 1 --format wav --out out.wav
 
 ## API
 
-### `exportImage(opts)`
-Renders one frame of a fragment shader to a still image.
+### `exportImage(opts)` / `exportVideo(opts)` / `exportFavicon(opts)`
+See the tables in previous docs. All accept an optional `vertexWgsl` if you want to replace the default full-screen triangle.
+
+### `exportAudio(opts)`
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `wgsl` | string | Fragment shader with `fs_main` |
-| `width` / `height` | number | Output size |
-| `format` | string | `png` \| `jpeg` \| `webp` \| `avif` \| `gif` |
-| `time` | number | Seconds (passed as `builtin.time`) |
-
-### `exportFavicon(opts)`
-Renders once and packs multiple sizes into a single `.ico`.
-
-### `exportVideo(opts)`
-Renders a sequence of frames → MP4 / WebM / OGV / animated GIF.
-
-### `exportAudio(opts)`
-Runs a compute shader → WAV / MP3 / OGG.
+| `wgsl` | string | Compute shader with `cs_main` |
+| `durationSeconds` | number | Length of the audio |
+| `format` | string | `wav` \| `mp3` \| `ogg` |
+| `sampleRate` | number | Default 44100 |
+| `workgroupSize` | number | Default 64 — **must match** `@workgroup_size(N)` in your WGSL |
 
 ---
 
-## Shader contracts
+## Shader contracts (important)
 
 ### Fragment shaders
-The library injects this uniform automatically — do **not** declare it yourself:
+
+**You only write the fragment stage.** The library supplies a default full-screen triangle vertex stage.
+
+#### What the library injects (do **not** redeclare)
 
 ```wgsl
 struct BuiltinUniforms {
@@ -147,10 +152,50 @@ struct BuiltinUniforms {
 @group(0) @binding(0) var<uniform> builtin: BuiltinUniforms;
 ```
 
-A full-screen triangle is supplied by default. UV is at `@location(0)`.
+#### Default vertex stage (hidden — you do not write this)
+
+```wgsl
+struct VertexOutput {
+  @builtin(position) position: vec4f,
+  @location(0) uv: vec2f,
+};
+
+@vertex
+fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+  // Full-screen triangle covering clip space
+  var positions = array<vec2f, 3>(
+    vec2f(-1.0, -1.0),
+    vec2f( 3.0, -1.0),
+    vec2f(-1.0,  3.0)
+  );
+  var uvs = array<vec2f, 3>(
+    vec2f(0.0, 1.0),
+    vec2f(2.0, 1.0),
+    vec2f(0.0, -1.0)
+  );
+  var out: VertexOutput;
+  out.position = vec4f(positions[vertexIndex], 0.0, 1.0);
+  out.uv = uvs[vertexIndex];
+  return out;
+}
+```
+
+#### What you write
+
+```wgsl
+@fragment
+fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+  // uv comes from the default vertex stage above
+  // builtin.time / builtin.resolution are available
+  return vec4f(uv.x, uv.y, 0.5, 1.0);
+}
+```
+
+If you need a custom vertex stage, pass `vertexWgsl` to `exportImage` / `exportVideo`.
 
 ### Compute shaders (audio)
-Your WGSL must follow this binding contract:
+
+Your WGSL must follow this binding contract. `@workgroup_size(N)` must match the `workgroupSize` option (default **64**):
 
 ```wgsl
 struct AudioParams {
@@ -163,7 +208,11 @@ struct AudioParams {
 @group(0) @binding(1) var<storage, read_write> samples: array<f32>;
 
 @compute @workgroup_size(64)
-fn cs_main(@builtin(global_invocation_id) id: vec3u) { ... }
+fn cs_main(@builtin(global_invocation_id) id: vec3u) {
+  let i = id.x;
+  if (i >= params.totalSamples) { return; }
+  // write samples[i] in [-1, 1]
+}
 ```
 
 Only mono is fully supported end-to-end right now.
