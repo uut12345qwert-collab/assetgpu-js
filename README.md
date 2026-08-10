@@ -1,8 +1,8 @@
 # assetgpu
 
-**Bake WGSL shaders into real assets.**
+**JavaScript library that bakes WGSL shaders into real assets.**
 
-`assetgpu` is a high-performance Node.js exporter that turns WebGPU / WGSL shaders into the files you actually ship:
+`assetgpu` is a **Node.js / JavaScript library** for turning WebGPU / WGSL shaders into the files you actually ship:
 
 ```
 Fragment shader  →  PNG · JPEG · WebP · AVIF · GIF · ICO
@@ -10,7 +10,7 @@ Fragment shader  →  MP4 · WebM · OGV · animated GIF
 Compute shader   →  WAV · MP3 · OGG
 ```
 
-Perfect for generative art pipelines, game asset builds, visual regression tests, and any workflow that needs reproducible files from procedural shaders.
+Use it as a normal JS dependency in build scripts, generative art tools, game pipelines, or CI.
 
 ---
 
@@ -23,7 +23,7 @@ WebGPU is excellent for live rendering. Most pipelines still need traditional fi
 - CI systems need deterministic visual snapshots
 - Design tools need favicons and stills
 
-`assetgpu` runs your WGSL headlessly and writes standard assets.
+This library runs your WGSL headlessly in Node and writes standard asset files.
 
 ---
 
@@ -45,7 +45,7 @@ npm install webgpu                      # headless WebGPU (required for renderin
 
 ---
 
-## Quick start
+## Quick start (JavaScript)
 
 ```js
 import { exportImage, exportVideo, exportAudio } from 'assetgpu';
@@ -182,8 +182,8 @@ Only mono is fully supported end-to-end right now.
 ## Project structure
 
 ```
-src/
-  index.js                  # Public API
+src/                     # JavaScript library source
+  index.js               # Public API
   core/
     gpu-backend.js
     fragment-renderer.js
@@ -192,7 +192,7 @@ src/
   video/  encode-video.js
   audio/  encode-audio.js
 bin/
-  assetgpu.js               # CLI
+  assetgpu.js            # CLI entry point
 ```
 
 ---
