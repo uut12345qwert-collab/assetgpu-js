@@ -1,45 +1,29 @@
 /**
  * assetgpu
  *
- * Scope (deliberately, not by omission — see README for what this
- * library does NOT attempt, e.g. fonts/CSS/documents from WGSL):
+ * JavaScript library that bakes WGSL shaders into real assets:
  *   1. WGSL fragment shader -> still image (PNG/JPEG/WebP/AVIF/GIF/ICO)
  *   2. WGSL fragment shader -> video (MP4/WebM/OGV) or animated GIF
- *   5. WGSL compute shader  -> audio (WAV/MP3/OGG)
+ *   3. WGSL compute shader  -> audio (WAV/MP3/OGG)
  */
 
 import { FragmentRenderer } from './core/fragment-renderer.js';
 import { ComputeAudioRenderer } from './core/compute-audio-renderer.js';
 // encode-image.js (sharp) and encode-video.js (@ffmpeg-installer/ffmpeg)
-// are intentionally NOT imported at top level here. If they were, every
-// consumer of this package — even one who only calls exportAudio() with
-// format:'wav', which has zero external dependencies — would fail to
-// even load the package unless sharp AND ffmpeg were both installed.
-// Each export* function below dynamic-imports only the encoder it
-// actually needs, at call time.
+// are intentionally NOT imported at top level. Each export* function
+// dynamic-imports only the encoder it needs at call time.
 
 const STILL_IMAGE_FORMATS = new Set(['png', 'jpeg', 'jpg', 'webp', 'avif', 'gif']);
 const VIDEO_FORMATS = new Set(['mp4', 'webm', 'ogv']);
 
 /**
  * Renders a WGSL fragment shader to a still image.
- *
- * @param {object} opts
- * @param {string} opts.wgsl - fragment shader source (fs_main entry point)
- * @param {number} opts.width
- * @param {number} opts.height
- * @param {'png'|'jpeg'|'jpg'|'webp'|'avif'|'gif'} opts.format
- * @param {number} [opts.time=0] - time uniform (seconds) passed to the shader
- * @param {string} [opts.vertexWgsl] - optional custom vertex stage
- * @param {object} [opts.encodeOptions] - passed to the underlying sharp encoder
- * @returns {Promise<Buffer>}
  */
 export async function exportImage({ wgsl, width, height, format, time = 0, vertexWgsl, encodeOptions = {} }) {
   if (!STILL_IMAGE_FORMATS.has(format?.toLowerCase())) {
     throw new Error(
       `exportImage: unsupported format "${format}". Supported: ${[...STILL_IMAGE_FORMATS].join(', ')}. ` +
-      'For animated GIF, use exportVideo with format "gif" instead — a single ' +
-      'frame and an animation are different problems.'
+      'For animated GIF, use exportVideo with format "gif" instead.'
     );
   }
 
@@ -55,14 +39,6 @@ export async function exportImage({ wgsl, width, height, format, time = 0, verte
 
 /**
  * Renders a WGSL fragment shader to a multi-resolution .ico favicon.
- *
- * @param {object} opts
- * @param {string} opts.wgsl
- * @param {number} [opts.sourceSize=256] - render resolution before downscaling
- * @param {number} [opts.time=0]
- * @param {number[]} [opts.sizes=[16,32,48,64]]
- * @param {string} [opts.vertexWgsl]
- * @returns {Promise<Buffer>}
  */
 export async function exportFavicon({ wgsl, sourceSize = 256, time = 0, sizes = [16, 32, 48, 64], vertexWgsl }) {
   const { encodeIco } = await import('./image/encode-image.js');
@@ -77,18 +53,6 @@ export async function exportFavicon({ wgsl, sourceSize = 256, time = 0, sizes = 
 
 /**
  * Renders a WGSL fragment shader across time to a video or animated GIF.
- *
- * @param {object} opts
- * @param {string} opts.wgsl
- * @param {number} opts.width
- * @param {number} opts.height
- * @param {'mp4'|'webm'|'ogv'|'gif'} opts.format
- * @param {number} opts.durationSeconds
- * @param {number} [opts.fps=30]
- * @param {string} [opts.vertexWgsl]
- * @param {(rendered: number, total: number) => void} [opts.onProgress]
- * @param {object} [opts.encodeOptions] - passed to the ffmpeg encoder (e.g. { crf })
- * @returns {Promise<Buffer>}
  */
 export async function exportVideo({
   wgsl, width, height, format, durationSeconds, fps = 30,
@@ -117,25 +81,30 @@ export async function exportVideo({
 }
 
 /**
- * Synthesizes audio from a WGSL compute shader (see
- * core/compute-audio-renderer.js for the required WGSL binding contract)
- * and encodes it to WAV, MP3, or OGG.
+ * Synthesizes audio from a WGSL compute shader and encodes it.
  *
  * @param {object} opts
- * @param {string} opts.wgsl - compute shader source (cs_main entry point)
+ * @param {string} opts.wgsl
  * @param {number} opts.durationSeconds
  * @param {'wav'|'mp3'|'ogg'} opts.format
  * @param {number} [opts.sampleRate=44100]
- * @param {object} [opts.encodeOptions] - e.g. { bitrateKbps: 192 } for mp3
- * @returns {Promise<Buffer>}
+ * @param {number} [opts.workgroupSize=64] - Must match @workgroup_size(N) in the WGSL
+ * @param {object} [opts.encodeOptions]
  */
-export async function exportAudio({ wgsl, durationSeconds, format, sampleRate = 44100, encodeOptions = {} }) {
+export async function exportAudio({
+  wgsl, durationSeconds, format, sampleRate = 44100,
+  workgroupSize = 64, encodeOptions = {},
+}) {
   const normalizedFormat = format?.toLowerCase();
   if (!['wav', 'mp3', 'ogg'].includes(normalizedFormat)) {
     throw new Error(`exportAudio: unsupported format "${format}". Supported: wav, mp3, ogg`);
   }
 
-  const renderer = new ComputeAudioRenderer({ computeWgsl: wgsl, sampleRate });
+  const renderer = new ComputeAudioRenderer({
+    computeWgsl: wgsl,
+    sampleRate,
+    workgroupSize,
+  });
   const samples = await renderer.render(durationSeconds);
 
   const { encodeWav, encodeCompressedAudio } = await import('./audio/encode-audio.js');
