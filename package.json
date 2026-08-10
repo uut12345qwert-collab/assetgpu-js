@@ -1,7 +1,7 @@
 {
   "name": "assetgpu",
   "version": "1.0.0",
-  "description": "High-performance WebGPU asset exporter. Bake WGSL shaders and compute pipelines into PNG, MP4, WAV and more.",
+  "description": "JavaScript library for baking WGSL / WebGPU shaders into PNG, MP4, WAV and other assets.",
   "type": "module",
   "main": "src/index.js",
   "bin": {
@@ -23,10 +23,13 @@
     "test": "node --test test/*.test.js"
   },
   "keywords": [
+    "javascript",
+    "js",
+    "library",
     "webgpu",
     "wgsl",
     "asset",
-    "exporter",
+    "export",
     "png",
     "mp4",
     "wav",
@@ -34,6 +37,7 @@
     "compute-shader",
     "generative-art",
     "headless",
+    "node",
     "ffmpeg",
     "sharp"
   ],
