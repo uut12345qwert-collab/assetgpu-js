@@ -15,17 +15,24 @@
  *     _pad: u32,
  *   };
  *
- *   @compute @workgroup_size(64)
+ *   @compute @workgroup_size(N)   // N must match the workgroupSize option (default 64)
  *   fn cs_main(@builtin(global_invocation_id) id: vec3u) { ... }
  */
 
 import { getGpuDevice } from './gpu-backend.js';
 
-const WORKGROUP_SIZE = 64;
+const DEFAULT_WORKGROUP_SIZE = 64;
 const MAX_STORAGE_BUFFER_FLOATS = 64 * 1024 * 1024;
 
 export class ComputeAudioRenderer {
-  constructor({ computeWgsl, sampleRate = 44100, channels = 1 }) {
+  /**
+   * @param {object} opts
+   * @param {string} opts.computeWgsl
+   * @param {number} [opts.sampleRate=44100]
+   * @param {number} [opts.channels=1]
+   * @param {number} [opts.workgroupSize=64] - Must match @workgroup_size(N) in the WGSL
+   */
+  constructor({ computeWgsl, sampleRate = 44100, channels = 1, workgroupSize = DEFAULT_WORKGROUP_SIZE }) {
     if (!computeWgsl || typeof computeWgsl !== 'string') {
       throw new TypeError('computeWgsl (string) is required');
     }
@@ -35,9 +42,13 @@ export class ComputeAudioRenderer {
         'currently supported by the audio encoders in this library.'
       );
     }
+    if (!Number.isInteger(workgroupSize) || workgroupSize < 1 || workgroupSize > 256) {
+      throw new TypeError('workgroupSize must be an integer between 1 and 256');
+    }
     this.computeWgsl = computeWgsl;
     this.sampleRate = sampleRate;
     this.channels = channels;
+    this.workgroupSize = workgroupSize;
     this._initialized = false;
   }
 
@@ -119,7 +130,8 @@ export class ComputeAudioRenderer {
     } catch (err) {
       throw new Error(
         `Failed to create compute pipeline — check that your WGSL defines ` +
-        `'cs_main' with the expected bindings. Original error: ${err.message}`
+        `'cs_main' with the expected bindings, and that @workgroup_size matches ` +
+        `the workgroupSize option (${this.workgroupSize}). Original error: ${err.message}`
       );
     }
 
@@ -127,7 +139,7 @@ export class ComputeAudioRenderer {
     const passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(pipeline);
     passEncoder.setBindGroup(0, bindGroup);
-    const workgroupCount = Math.ceil(totalSamples / WORKGROUP_SIZE);
+    const workgroupCount = Math.ceil(totalSamples / this.workgroupSize);
     passEncoder.dispatchWorkgroups(workgroupCount);
     passEncoder.end();
 
