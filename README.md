@@ -133,15 +133,6 @@ See the tables in previous docs. All accept an optional `vertexWgsl` if you want
 | `sampleRate` | number | Default 44100 |
 | `workgroupSize` | number | Default 64 — **must match** `@workgroup_size(N)` in your WGSL |
 
-### Video encoding note
-
-`exportVideo` streams raw RGBA frames **directly to FFmpeg’s stdin**. It does **not**:
-
-- concatenate all frames into one giant in-memory buffer, or
-- write a multi-gigabyte `frames.rgba` file to disk.
-
-Only the final encoded output (MP4 / WebM / GIF / …) uses a small temporary file. That keeps long or high-resolution encodes from blowing up memory or disk with intermediate raw video.
-
 ---
 
 ## Shader contracts (important)
@@ -269,3 +260,29 @@ npm test
 ## License
 
 MIT
+
+---
+
+## Debugs and fixes
+
+A revised version of the video pipeline is in place. Details below.
+
+### Issue: giant intermediate raw video (memory / disk)
+
+Earlier versions of `encode-video.js` took every rendered frame, concatenated them with `Buffer.concat(...)` into one enormous binary buffer, wrote that buffer to a temporary file (`frames.rgba`), and only then asked FFmpeg to read it.
+
+For long or high-resolution clips this was unsafe. Example: a **60 second** video at **60 FPS** in **1080p** is on the order of **~30 GB** of raw RGBA. That path could:
+
+- exhaust process memory while building the concatenated buffer, and/or
+- fill the disk with a multi-gigabyte temporary file before FFmpeg even started.
+
+### Fix: stream frames to FFmpeg stdin
+
+The current implementation streams each frame **directly to FFmpeg’s standard input** (`-i pipe:0`). It does **not**:
+
+- concatenate all frames into one giant in-memory buffer, or
+- write a raw `frames.rgba` file to disk.
+
+Frames are written one-by-one to the FFmpeg process with backpressure handling. Only the **final encoded** output (MP4 / WebM / GIF / …) uses a small temporary file, which is required for muxers that need seekable output (e.g. MP4 with `+faststart`).
+
+This revision lives in `src/video/encode-video.js`.
