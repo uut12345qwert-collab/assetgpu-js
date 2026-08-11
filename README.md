@@ -133,6 +133,15 @@ See the tables in previous docs. All accept an optional `vertexWgsl` if you want
 | `sampleRate` | number | Default 44100 |
 | `workgroupSize` | number | Default 64 — **must match** `@workgroup_size(N)` in your WGSL |
 
+### Video encoding note
+
+`exportVideo` streams raw RGBA frames **directly to FFmpeg’s stdin**. It does **not**:
+
+- concatenate all frames into one giant in-memory buffer, or
+- write a multi-gigabyte `frames.rgba` file to disk.
+
+Only the final encoded output (MP4 / WebM / GIF / …) uses a small temporary file. That keeps long or high-resolution encodes from blowing up memory or disk with intermediate raw video.
+
 ---
 
 ## Shader contracts (important)
