@@ -12,6 +12,8 @@ Compute shader   →  WAV · MP3 · OGG
 
 Use it as a normal JS dependency in build scripts, generative art tools, game pipelines, or CI.
 
+**Full documentation (wiki):** [docs/Home.md](docs/Home.md) — getting started, API, architecture, code walkthrough, tutorials, changelog, debugs & fixes.
+
 ---
 
 ## Why assetgpu?
@@ -242,6 +244,7 @@ src/                     # JavaScript library source
   audio/  encode-audio.js
 bin/
   assetgpu.js            # CLI entry point
+docs/                    # Project wiki (maintained with the code)
 ```
 
 ---
@@ -286,3 +289,5 @@ The current implementation streams each frame **directly to FFmpeg’s standard 
 Frames are written one-by-one to the FFmpeg process with backpressure handling. Only the **final encoded** output (MP4 / WebM / GIF / …) uses a small temporary file, which is required for muxers that need seekable output (e.g. MP4 with `+faststart`).
 
 This revision lives in `src/video/encode-video.js`.
+
+Full write-up: [docs/Debugs-and-Fixes.md](docs/Debugs-and-Fixes.md).
